@@ -116,6 +116,14 @@ def generate_prompt(diff, format_type):
     prompt += "\n\nHere are the staged changes:\n\n"
     prompt += diff
 
+    # Append the trigger command to ensure the model knows what to do
+    if format_type == "generate":
+        prompt += '\n\nCOMMAND: "generate" (Output ONLY the commit message)'
+    elif format_type == "split":
+        prompt += '\n\nCOMMAND: "generate split" (Output ONLY the grouped commit messages)'
+    elif format_type == "emoji":
+        prompt += '\n\nCOMMAND: "generate emoji" (Output ONLY the commit message with emoji)'
+
     return prompt
 
 def call_ollama(url, model, prompt, dry_run=False):
