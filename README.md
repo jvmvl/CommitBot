@@ -7,6 +7,9 @@ A command-line tool that generates Conventional Commit messages from your staged
 - **Local AI**: Uses your local Ollama instance (default: `mistral`, configurable to models like `gpt-oss:120b-cloud`)—no data leaves your machine.
 - **Context-Aware**: Analyzes staged changes (`git diff --cached`) to generate relevant messages.
 - **Auto-Commit**: Can commit changes directly or open your editor with the generated message.
+- **Configurable**: Set defaults via `.commitbot.json` in your home or project directory.
+- **Smart Filtering**: Automatically ignores lockfiles (`package-lock.json`, `yarn.lock`, etc.) to keep prompts efficient.
+- **Interactive Retry**: Don't like the message? Ask CommitBot to try again.
 - **Multiple Formats**:
   - `generate`: A standard Conventional Commit.
   - `split`: Breaks down large changes into multiple atomic commits.
@@ -73,6 +76,7 @@ commitbot
 ### Commit Automatically
 #### Interactive Confirmation (`--commit`)
 Review the message in the terminal, then confirm with `y` to commit immediately.
+If you don't like the message, type `r` to regenerate it (you can optionally add feedback like "Make it shorter").
 ```bash
 commitbot --commit
 ```
@@ -87,6 +91,17 @@ commitbot --edit
 Use a specific model (e.g., `gpt-oss:120b-cloud`, `llama3`):
 ```bash
 commitbot --model gpt-oss:120b-cloud
+```
+
+### Configuration File (`.commitbot.json`)
+You can set defaults by creating a `.commitbot.json` file in your **home directory** or the **project root**.
+Example:
+```json
+{
+  "model": "gpt-oss:120b-cloud",
+  "url": "http://localhost:11434",
+  "format": "emoji"
+}
 ```
 
 ### Output Formats
