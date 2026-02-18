@@ -151,6 +151,24 @@ def call_ollama(url, model, prompt, dry_run=False):
     except requests.exceptions.ConnectionError:
         print(f"Error: Could not connect to Ollama at {url}. Is it running?", file=sys.stderr)
         sys.exit(1)
+    except requests.exceptions.HTTPError as e:
+        if e.response.status_code == 404:
+            print(f"Error: Model '{model}' not found. (404 Not Found)", file=sys.stderr)
+            print(f"Tip: Run 'ollama pull {model}' to install it.", file=sys.stderr)
+            print(f"     Or use a different model with '--model <name>'.", file=sys.stderr)
+
+            # Try to list available models
+            try:
+                tags_response = requests.get(f"{url}/api/tags")
+                tags_response.raise_for_status()
+                models = [m['name'] for m in tags_response.json().get('models', [])]
+                if models:
+                    print(f"     Available models: {', '.join(models)}", file=sys.stderr)
+            except:
+                pass # Ignore errors when trying to help
+        else:
+            print(f"Error calling Ollama API: {e}", file=sys.stderr)
+        sys.exit(1)
     except requests.exceptions.RequestException as e:
         print(f"Error calling Ollama API: {e}", file=sys.stderr)
         sys.exit(1)
