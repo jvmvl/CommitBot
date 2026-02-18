@@ -220,7 +220,7 @@ def main():
 
     # Defaults
     default_url = config.get("url", "http://localhost:11434")
-    default_model = config.get("model", "mistral")
+    default_model = config.get("model", "gpt-oss:120b-cloud")
     default_format = config.get("format", "generate")
 
     parser = argparse.ArgumentParser(description="CommitBot: Generate commit messages from staged changes using Ollama.")

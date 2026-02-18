@@ -4,7 +4,7 @@ A command-line tool that generates Conventional Commit messages from your staged
 
 ## Features
 
-- **Local AI**: Uses your local Ollama instance (default: `mistral`, configurable to models like `gpt-oss:120b-cloud`)—no data leaves your machine.
+- **Local AI**: Uses your local Ollama instance (default: `gpt-oss:120b-cloud`)—no data leaves your machine.
 - **Context-Aware**: Analyzes staged changes (`git diff --cached`) to generate relevant messages.
 - **Auto-Commit**: Can commit changes directly or open your editor with the generated message.
 - **Configurable**: Set defaults via `.commitbot.json` in your home or project directory.
@@ -21,7 +21,7 @@ A command-line tool that generates Conventional Commit messages from your staged
 - **Python 3.6+**
 - **Git** (available in your PATH)
 - **Ollama**: Must be installed and running locally. [Install Ollama](https://ollama.com/).
-  - Make sure you have pulled a model (e.g., `ollama pull mistral` or `ollama pull gpt-oss:120b-cloud`).
+  - Make sure you have pulled the model (e.g., `ollama pull gpt-oss:120b-cloud`).
 
 ## Installation
 
@@ -68,7 +68,7 @@ git add .
 
 Then run CommitBot:
 
-### Basic Usage (Default: `mistral` model, `generate` format)
+### Basic Usage (Default: `gpt-oss:120b-cloud` model, `generate` format)
 ```bash
 commitbot
 ```
@@ -162,9 +162,9 @@ commitbot --dry-run
     ```bash
     py -m pip install -r requirements.txt
     ```
-- **"Error: Model 'mistral' not found" (404 Error)**:
+- **"Error: Model 'gpt-oss:120b-cloud' not found" (404 Error)**:
   - This means the model hasn't been downloaded to Ollama yet.
-  - Run `ollama pull mistral` (or whatever model you want to use).
+  - Run `ollama pull gpt-oss:120b-cloud` (or whatever model you want to use).
   - Run `ollama list` to see what models you have available.
 - **"No staged changes."**: Make sure you have run `git add <files>` before running CommitBot.
 - **Connection Error**: Ensure Ollama is running (`ollama serve`).
