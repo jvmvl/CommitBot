@@ -15,30 +15,38 @@ A command-line tool that generates Conventional Commit messages from your staged
 ## Prerequisites
 
 - **Python 3.6+**
-- **Git**
+- **Git** (available in your PATH)
 - **Ollama**: Must be installed and running locally. [Install Ollama](https://ollama.com/).
   - Make sure you have pulled a model (e.g., `ollama pull mistral` or `ollama pull ministral`).
 
 ## Installation
 
-1.  **Clone the repository** (or download `commitbot.py`):
-    ```bash
-    git clone https://github.com/yourusername/commitbot.git
-    cd commitbot
-    ```
+### 1. Clone or Download
+Clone the repository or download `commitbot.py` and `requirements.txt`.
+```bash
+git clone https://github.com/yourusername/commitbot.git
+cd commitbot
+```
 
-2.  **Install dependencies**:
-    ```bash
-    pip install -r requirements.txt
-    ```
+### 2. Install Dependencies
+```bash
+pip install -r requirements.txt
+```
 
-3.  **Make executable**:
+### 3. Setup (OS Specific)
+
+#### Windows
+You can run it directly with `python commitbot.py`, but to make it easier:
+1.  **Add the folder to your PATH** environment variable.
+2.  Or copy `commitbot.py` and `commitbot.bat` to a folder already in your PATH (e.g., `C:\Program Files\CommitBot`).
+3.  Now you can just type `commitbot` in Command Prompt or PowerShell.
+
+#### macOS / Linux
+1.  Make the script executable:
     ```bash
     chmod +x commitbot.py
     ```
-
-4.  **(Optional) Add to your PATH**:
-    To run `commitbot` from anywhere, create a symlink:
+2.  Create a symlink to run it from anywhere:
     ```bash
     sudo ln -s $(pwd)/commitbot.py /usr/local/bin/commitbot
     ```
@@ -81,18 +89,30 @@ commitbot --format emoji
 ```
 
 ### Custom Ollama URL
-If Ollama is running on a different port or host:
+If Ollama is running on a different port or host (e.g., WSL to Windows host):
 ```bash
-commitbot --url http://192.168.1.50:11434
+# Windows / Mac / Linux default
+commitbot --url http://localhost:11434
+
+# From WSL2 to Windows host
+commitbot --url http://host.docker.internal:11434
 ```
 
-### Copy to Clipboard (macOS/Linux)
+### Copy to Clipboard
 Generate and copy directly to your clipboard:
-```bash
-# macOS
-commitbot | pbcopy
 
-# Linux (xclip)
+**Windows (PowerShell / CMD)**
+```powershell
+commitbot | clip
+```
+
+**macOS**
+```bash
+commitbot | pbcopy
+```
+
+**Linux (xclip)**
+```bash
 commitbot | xclip -selection clipboard
 ```
 
@@ -107,3 +127,4 @@ commitbot --dry-run
 - **"No staged changes."**: Make sure you have run `git add <files>` before running CommitBot.
 - **Connection Error**: Ensure Ollama is running (`ollama serve`).
 - **Large Diff Warning**: If your staged changes are very large (>10k chars), CommitBot will warn you. Consider splitting your changes or using `--format split`.
+- **Windows Encoding**: If you see weird characters, try setting `chcp 65001` in your terminal for UTF-8 support.
