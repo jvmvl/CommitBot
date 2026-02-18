@@ -4,7 +4,7 @@ A command-line tool that generates Conventional Commit messages from your staged
 
 ## Features
 
-- **Local AI**: Uses your local Ollama instance (default: `mistral`)—no data leaves your machine.
+- **Local AI**: Uses your local Ollama instance (default: `mistral`, configurable to models like `gpt-oss:120b-cloud`)—no data leaves your machine.
 - **Context-Aware**: Analyzes staged changes (`git diff --cached`) to generate relevant messages.
 - **Auto-Commit**: Can commit changes directly or open your editor with the generated message.
 - **Multiple Formats**:
@@ -18,7 +18,7 @@ A command-line tool that generates Conventional Commit messages from your staged
 - **Python 3.6+**
 - **Git** (available in your PATH)
 - **Ollama**: Must be installed and running locally. [Install Ollama](https://ollama.com/).
-  - Make sure you have pulled a model (e.g., `ollama pull mistral` or `ollama pull ministral`).
+  - Make sure you have pulled a model (e.g., `ollama pull mistral` or `ollama pull gpt-oss:120b-cloud`).
 
 ## Installation
 
@@ -84,9 +84,9 @@ commitbot --edit
 ```
 
 ### Specify Model
-Use a specific model (e.g., `ministral`, `llama3`):
+Use a specific model (e.g., `gpt-oss:120b-cloud`, `llama3`):
 ```bash
-commitbot --model ministral
+commitbot --model gpt-oss:120b-cloud
 ```
 
 ### Output Formats
