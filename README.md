@@ -6,6 +6,7 @@ A command-line tool that generates Conventional Commit messages from your staged
 
 - **Local AI**: Uses your local Ollama instance (default: `mistral`)—no data leaves your machine.
 - **Context-Aware**: Analyzes staged changes (`git diff --cached`) to generate relevant messages.
+- **Auto-Commit**: Can commit changes directly or open your editor with the generated message.
 - **Multiple Formats**:
   - `generate`: A standard Conventional Commit.
   - `split`: Breaks down large changes into multiple atomic commits.
@@ -30,7 +31,11 @@ cd commitbot
 
 ### 2. Install Dependencies
 ```bash
+# General
 pip install -r requirements.txt
+
+# Windows (if using 'py' launcher)
+py -m pip install -r requirements.txt
 ```
 
 ### 3. Setup (OS Specific)
@@ -63,6 +68,19 @@ Then run CommitBot:
 ### Basic Usage (Default: `mistral` model, `generate` format)
 ```bash
 commitbot
+```
+
+### Commit Automatically
+#### Interactive Confirmation (`--commit`)
+Review the message in the terminal, then confirm with `y` to commit immediately.
+```bash
+commitbot --commit
+```
+
+#### Open in Editor (`--edit`)
+Opens your configured git editor (e.g., vim, nano, VS Code) with the generated message pre-filled. You can edit it before saving/committing.
+```bash
+commitbot --edit
 ```
 
 ### Specify Model
@@ -124,6 +142,15 @@ commitbot --dry-run
 
 ## Troubleshooting
 
+- **"ModuleNotFoundError: No module named 'requests'"**:
+  - On Windows, try installing dependencies specifically for the Python version you are running:
+    ```bash
+    py -m pip install -r requirements.txt
+    ```
+- **"Error: Model 'mistral' not found" (404 Error)**:
+  - This means the model hasn't been downloaded to Ollama yet.
+  - Run `ollama pull mistral` (or whatever model you want to use).
+  - Run `ollama list` to see what models you have available.
 - **"No staged changes."**: Make sure you have run `git add <files>` before running CommitBot.
 - **Connection Error**: Ensure Ollama is running (`ollama serve`).
 - **Large Diff Warning**: If your staged changes are very large (>10k chars), CommitBot will warn you. Consider splitting your changes or using `--format split`.

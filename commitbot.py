@@ -5,6 +5,7 @@ import subprocess
 import requests
 import json
 import os
+import tempfile
 
 # --- Prompt Templates ---
 
@@ -182,6 +183,11 @@ def main():
     parser.add_argument("--format", choices=["generate", "split", "emoji"], default="generate", help="Output format (default: generate)")
     parser.add_argument("--dry-run", action="store_true", help="Print the prompt and exit without calling Ollama")
 
+    # New flags for commit functionality
+    group = parser.add_mutually_exclusive_group()
+    group.add_argument("--commit", action="store_true", help="Confirm and commit the generated message immediately.")
+    group.add_argument("--edit", action="store_true", help="Open the generated message in your editor before committing.")
+
     args = parser.parse_args()
 
     repo_path = os.path.abspath(args.path)
@@ -208,7 +214,54 @@ def main():
 
     commit_msg = call_ollama(args.url, args.model, prompt, dry_run=args.dry_run)
 
-    print(commit_msg)
+    if args.dry_run:
+        # Check if dry run returned a message string or None
+        if commit_msg:
+             print(commit_msg)
+        return
+
+    # Handle commit options
+    if args.commit:
+        print("\n--- Generated Commit Message ---")
+        print(commit_msg)
+        print("--------------------------------")
+        try:
+            choice = input("Do you want to commit with this message? [y/N] ").strip().lower()
+            if choice == 'y':
+                subprocess.run(["git", "commit", "-m", commit_msg], cwd=repo_path, check=True)
+                print("Committed successfully.")
+            else:
+                print("Commit aborted.")
+        except KeyboardInterrupt:
+            print("\nAborted.")
+            sys.exit(1)
+        except subprocess.CalledProcessError as e:
+             print(f"Error executing git commit: {e}", file=sys.stderr)
+             sys.exit(1)
+
+    elif args.edit:
+        # Create a temporary file with the commit message
+        with tempfile.NamedTemporaryFile(mode='w+', delete=False, encoding='utf-8') as tf:
+            tf.write(commit_msg)
+            temp_path = tf.name
+
+        try:
+            print("Opening editor for review...")
+            # Use git commit -e -F <file> to open editor with pre-filled message
+            # The editor used is configured in git (core.editor)
+            subprocess.run(["git", "commit", "-e", "-F", temp_path], cwd=repo_path, check=True)
+            print("Committed successfully.")
+        except subprocess.CalledProcessError as e:
+             print(f"Error executing git commit: {e}", file=sys.stderr)
+             sys.exit(1)
+        finally:
+            # Clean up temp file
+            if os.path.exists(temp_path):
+                os.remove(temp_path)
+
+    else:
+        # Default behavior: print to stdout
+        print(commit_msg)
 
 if __name__ == "__main__":
     main()
