@@ -1,0 +1,17 @@
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+.env
+.ipynb_checkpoints
+.DS_Store
+.commitbot.json
+dist/
+build/
+*.egg-info/
