@@ -7,6 +7,13 @@ import json
 import os
 import tempfile
 from pathlib import Path
+import colorama
+from colorama import Fore, Style
+
+# Initialize colorama
+colorama.init()
+
+VERSION = "1.0.0"
 
 # --- Prompt Templates ---
 
@@ -71,6 +78,18 @@ FORMATS
 
 # --- Functions ---
 
+def print_error(msg):
+    print(f"{Fore.RED}{msg}{Style.RESET_ALL}", file=sys.stderr)
+
+def print_warning(msg):
+    print(f"{Fore.YELLOW}{msg}{Style.RESET_ALL}", file=sys.stderr)
+
+def print_info(msg):
+    print(f"{Fore.CYAN}{msg}{Style.RESET_ALL}", file=sys.stderr)
+
+def print_success(msg):
+    print(f"{Fore.GREEN}{msg}{Style.RESET_ALL}", file=sys.stdout) # Note: Success usually goes to stdout
+
 def load_config():
     """
     Loads configuration from .commitbot.json in the current directory or home directory.
@@ -84,7 +103,7 @@ def load_config():
             with open(home_config_path, "r") as f:
                 config.update(json.load(f))
         except json.JSONDecodeError:
-            print(f"Warning: Could not parse config file at {home_config_path}", file=sys.stderr)
+            print_warning(f"Warning: Could not parse config file at {home_config_path}")
 
     # Check current directory (higher priority)
     local_config_path = Path.cwd() / ".commitbot.json"
@@ -93,7 +112,7 @@ def load_config():
             with open(local_config_path, "r") as f:
                 config.update(json.load(f))
         except json.JSONDecodeError:
-             print(f"Warning: Could not parse config file at {local_config_path}", file=sys.stderr)
+             print_warning(f"Warning: Could not parse config file at {local_config_path}")
 
     return config
 
@@ -109,10 +128,10 @@ def get_staged_diff(repo_path):
             stderr=subprocess.DEVNULL
         )
     except subprocess.CalledProcessError:
-        print(f"Error: '{repo_path}' is not a git repository.", file=sys.stderr)
+        print_error(f"Error: '{repo_path}' is not a git repository.")
         sys.exit(1)
     except FileNotFoundError:
-        print("Error: 'git' command not found.", file=sys.stderr)
+        print_error("Error: 'git' command not found.")
         sys.exit(1)
 
     try:
@@ -134,7 +153,7 @@ def get_staged_diff(repo_path):
         )
         return diff
     except subprocess.CalledProcessError as e:
-        print(f"Error getting git diff: {e.stderr}", file=sys.stderr)
+        print_error(f"Error getting git diff: {e.stderr}")
         sys.exit(1)
 
 def generate_prompt(diff, format_type, feedback=None):
@@ -172,9 +191,9 @@ def call_ollama(url, model, prompt, dry_run=False):
     Calls the Ollama API to generate the commit message.
     """
     if dry_run:
-        print("--- DRY RUN: Generated Prompt ---")
+        print(f"{Fore.MAGENTA}--- DRY RUN: Generated Prompt ---{Style.RESET_ALL}")
         print(prompt)
-        print("---------------------------------")
+        print(f"{Fore.MAGENTA}---------------------------------{Style.RESET_ALL}")
         return "Dry run: No API call made."
 
     api_url = f"{url}/api/generate"
@@ -190,13 +209,13 @@ def call_ollama(url, model, prompt, dry_run=False):
         result = response.json()
         return result.get("response", "")
     except requests.exceptions.ConnectionError:
-        print(f"Error: Could not connect to Ollama at {url}. Is it running?", file=sys.stderr)
+        print_error(f"Error: Could not connect to Ollama at {url}. Is it running?")
         sys.exit(1)
     except requests.exceptions.HTTPError as e:
         if e.response.status_code == 404:
-            print(f"Error: Model '{model}' not found. (404 Not Found)", file=sys.stderr)
-            print(f"Tip: Run 'ollama pull {model}' to install it.", file=sys.stderr)
-            print(f"     Or use a different model with '--model <name>'.", file=sys.stderr)
+            print_error(f"Error: Model '{model}' not found. (404 Not Found)")
+            print_info(f"Tip: Run 'ollama pull {model}' to install it.")
+            print_info(f"     Or use a different model with '--model <name>'.")
 
             # Try to list available models
             try:
@@ -204,14 +223,14 @@ def call_ollama(url, model, prompt, dry_run=False):
                 tags_response.raise_for_status()
                 models = [m['name'] for m in tags_response.json().get('models', [])]
                 if models:
-                    print(f"     Available models: {', '.join(models)}", file=sys.stderr)
+                    print_info(f"     Available models: {', '.join(models)}")
             except:
                 pass # Ignore errors when trying to help
         else:
-            print(f"Error calling Ollama API: {e}", file=sys.stderr)
+            print_error(f"Error calling Ollama API: {e}")
         sys.exit(1)
     except requests.exceptions.RequestException as e:
-        print(f"Error calling Ollama API: {e}", file=sys.stderr)
+        print_error(f"Error calling Ollama API: {e}")
         sys.exit(1)
 
 def main():
@@ -230,6 +249,7 @@ def main():
     parser.add_argument("--model", default=default_model, help=f"Ollama model to use (default: {default_model})")
     parser.add_argument("--format", choices=["generate", "split", "emoji"], default=default_format, help=f"Output format (default: {default_format})")
     parser.add_argument("--dry-run", action="store_true", help="Print the prompt and exit without calling Ollama")
+    parser.add_argument("--version", action="store_true", help="Print version information")
 
     # New flags for commit functionality
     group = parser.add_mutually_exclusive_group()
@@ -238,22 +258,26 @@ def main():
 
     args = parser.parse_args()
 
+    if args.version:
+        print(f"CommitBot v{VERSION}")
+        sys.exit(0)
+
     repo_path = os.path.abspath(args.path)
 
     if not os.path.isdir(repo_path):
-        print(f"Error: Directory '{repo_path}' not found.", file=sys.stderr)
+        print_error(f"Error: Directory '{repo_path}' not found.")
         sys.exit(1)
 
-    print(f"Checking for staged changes in {repo_path}...", file=sys.stderr)
+    print_info(f"Checking for staged changes in {repo_path}...")
     diff = get_staged_diff(repo_path)
 
     if not diff.strip():
-        print("No staged changes.", file=sys.stderr)
+        print_warning("No staged changes.")
         return
 
     # Warning for large diffs
     if len(diff) > 10000:
-        print(f"Warning: Large diff detected ({len(diff)} characters). Results might be truncated or less accurate.", file=sys.stderr)
+        print_warning(f"Warning: Large diff detected ({len(diff)} characters). Results might be truncated or less accurate.")
 
     # Interactive generation and retry loop
     prompt_suffix = None
@@ -263,9 +287,9 @@ def main():
 
         if not args.dry_run:
             if prompt_suffix:
-                print(f"Regenerating commit message...", file=sys.stderr)
+                print_info(f"Regenerating commit message...")
             else:
-                print(f"Generating commit message using model '{args.model}'...", file=sys.stderr)
+                print_info(f"Generating commit message using model '{args.model}'...")
 
         commit_msg = call_ollama(args.url, args.model, prompt, dry_run=args.dry_run)
 
@@ -276,27 +300,27 @@ def main():
 
         # Main interaction loop
         if args.commit:
-            print("\n--- Generated Commit Message ---")
+            print(f"\n{Fore.MAGENTA}--- Generated Commit Message ---{Style.RESET_ALL}")
             print(commit_msg)
-            print("--------------------------------")
+            print(f"{Fore.MAGENTA}--------------------------------{Style.RESET_ALL}")
             try:
-                choice = input("Do you want to commit with this message? [y/N/r] ").strip().lower()
+                choice = input(f"{Fore.YELLOW}Do you want to commit with this message? [y/N/r] {Style.RESET_ALL}").strip().lower()
                 if choice == 'y':
                     subprocess.run(["git", "commit", "-m", commit_msg], cwd=repo_path, check=True)
-                    print("Committed successfully.")
+                    print_success("Committed successfully.")
                     break
                 elif choice == 'r':
-                    user_input = input("Optional feedback (press Enter to just retry): ").strip()
+                    user_input = input(f"{Fore.CYAN}Optional feedback (press Enter to just retry): {Style.RESET_ALL}").strip()
                     prompt_suffix = user_input if user_input else "Please regenerate a better commit message."
                     continue
                 else:
-                    print("Commit aborted.")
+                    print_warning("Commit aborted.")
                     break
             except KeyboardInterrupt:
-                print("\nAborted.")
+                print_warning("\nAborted.")
                 sys.exit(1)
             except subprocess.CalledProcessError as e:
-                 print(f"Error executing git commit: {e}", file=sys.stderr)
+                 print_error(f"Error executing git commit: {e}")
                  sys.exit(1)
 
         elif args.edit:
@@ -309,11 +333,11 @@ def main():
                 temp_path = tf.name
 
             try:
-                print("Opening editor for review...")
+                print_info("Opening editor for review...")
                 subprocess.run(["git", "commit", "-e", "-F", temp_path], cwd=repo_path, check=True)
-                print("Committed successfully.")
+                print_success("Committed successfully.")
             except subprocess.CalledProcessError as e:
-                 print(f"Error executing git commit: {e}", file=sys.stderr)
+                 print_error(f"Error executing git commit: {e}")
                  sys.exit(1)
             finally:
                 if os.path.exists(temp_path):
@@ -322,6 +346,7 @@ def main():
 
         else:
             # Standard output mode
+            # Just print the message cleanly so it can be piped
             print(commit_msg)
             break
 

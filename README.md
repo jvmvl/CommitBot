@@ -10,6 +10,7 @@ A command-line tool that generates Conventional Commit messages from your staged
 - **Configurable**: Set defaults via `.commitbot.json` in your home or project directory.
 - **Smart Filtering**: Automatically ignores lockfiles (`package-lock.json`, `yarn.lock`, etc.) to keep prompts efficient.
 - **Interactive Retry**: Don't like the message? Ask CommitBot to try again.
+- **Beautiful Output**: Color-coded output for better readability.
 - **Multiple Formats**:
   - `generate`: A standard Conventional Commit.
   - `split`: Breaks down large changes into multiple atomic commits.
@@ -153,6 +154,11 @@ commitbot | xclip -selection clipboard
 Preview the prompt without calling the API:
 ```bash
 commitbot --dry-run
+```
+
+### Check Version
+```bash
+commitbot --version
 ```
 
 ## Troubleshooting
