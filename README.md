@@ -7,6 +7,7 @@ A command-line tool that generates Conventional Commit messages from your staged
 - **Local AI**: Uses your local Ollama instance (default: `gpt-oss:120b-cloud`)—no data leaves your machine.
 - **Context-Aware**: Analyzes staged changes (`git diff --cached`) to generate relevant messages.
 - **Auto-Commit**: Can commit changes directly or open your editor with the generated message.
+- **Smart Split**: Automatically splits large changes into multiple atomic commits (JSON-powered plan).
 - **Configurable**: Set defaults via `.commitbot.json` in your home or project directory.
 - **Smart Filtering**: Automatically ignores lockfiles (`package-lock.json`, `yarn.lock`, etc.) to keep prompts efficient.
 - **Interactive Retry**: Don't like the message? Ask CommitBot to try again.
@@ -113,9 +114,12 @@ commitbot --format generate
 ```
 
 **Split Commits (for large changes):**
+This format asks the AI to break down your changes into multiple, atomic commits.
+It works best with `--commit`, where you can review the plan and execute it.
 ```bash
-commitbot --format split
+commitbot --format split --commit
 ```
+CommitBot will show you a plan (e.g., "Commit 1: feat(auth)... Files: src/auth.ts"). If you approve, it will automatically stage and commit each group sequentially.
 
 **Emoji Style:**
 ```bash

@@ -6,6 +6,7 @@ import requests
 import json
 import os
 import tempfile
+import re
 from pathlib import Path
 import colorama
 from colorama import Fore, Style
@@ -51,17 +52,22 @@ TRIGGERS
 
 FORMATS
 (For "generate split")
+Return a VALID JSON array of objects. Do not include markdown formatting like ```json.
+Each object must have:
+- "message": The commit message (string).
+- "files": A list of file paths (strings) included in this commit.
 
-Commit 1
-<type>(<scope>): <summary>
-
-<bullet>
-<bullet>
-
-Commit 2
-<type>(<scope>): <summary>
-
-<bullet>
+Example:
+[
+  {
+    "message": "feat(auth): add login",
+    "files": ["src/auth.ts", "src/login.html"]
+  },
+  {
+    "message": "fix(ui): fix button color",
+    "files": ["src/styles.css"]
+  }
+]
 """
 
 FORMAT_EMOJI = """
@@ -156,6 +162,20 @@ def get_staged_diff(repo_path):
         print_error(f"Error getting git diff: {e.stderr}")
         sys.exit(1)
 
+def get_staged_files(repo_path):
+    """
+    Get a list of staged files.
+    """
+    try:
+        files = subprocess.check_output(
+            ["git", "diff", "--name-only", "--cached"],
+            cwd=repo_path,
+            text=True
+        ).strip().splitlines()
+        return files
+    except subprocess.CalledProcessError:
+        return []
+
 def generate_prompt(diff, format_type, feedback=None):
     """
     Constructs the prompt for the LLM based on the diff and format type.
@@ -177,7 +197,7 @@ def generate_prompt(diff, format_type, feedback=None):
     if format_type == "generate":
         prompt += '\n\nCOMMAND: "generate" (Output ONLY the commit message)'
     elif format_type == "split":
-        prompt += '\n\nCOMMAND: "generate split" (Output ONLY the grouped commit messages)'
+        prompt += '\n\nCOMMAND: "generate split" (Output ONLY the JSON array)'
     elif format_type == "emoji":
         prompt += '\n\nCOMMAND: "generate emoji" (Output ONLY the commit message with emoji)'
 
@@ -200,7 +220,10 @@ def call_ollama(url, model, prompt, dry_run=False):
     payload = {
         "model": model,
         "prompt": prompt,
-        "stream": False
+        "stream": False,
+        "options": {
+            "temperature": 0.2 # Low temperature for consistent JSON
+        }
     }
 
     try:
@@ -232,6 +255,68 @@ def call_ollama(url, model, prompt, dry_run=False):
     except requests.exceptions.RequestException as e:
         print_error(f"Error calling Ollama API: {e}")
         sys.exit(1)
+
+def extract_json(text):
+    """
+    Extracts a JSON list from the text, handling markdown code blocks.
+    """
+    text = text.strip()
+    # Remove markdown code blocks if present
+    match = re.search(r'```json\s*([\s\S]*?)\s*```', text)
+    if match:
+        text = match.group(1)
+    elif text.startswith("```") and text.endswith("```"):
+         text = text.strip("`").strip()
+
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        return None
+
+def execute_smart_split(plan, repo_path, all_staged_files):
+    """
+    Executes the split commit plan.
+    """
+    print_info("Unstaging all files to prepare for split commits...")
+    subprocess.run(["git", "restore", "--staged", "."], cwd=repo_path, check=True)
+
+    staged_files_start = set(all_staged_files)
+    committed_files = set()
+
+    for i, commit in enumerate(plan, 1):
+        message = commit.get('message')
+        files = commit.get('files', [])
+
+        if not files:
+            print_warning(f"Skipping Commit {i}: No files specified.")
+            continue
+
+        print_info(f"Processing Commit {i}: {message.splitlines()[0]}...")
+
+        # Stage specific files
+        try:
+            subprocess.run(["git", "add"] + files, cwd=repo_path, check=True)
+        except subprocess.CalledProcessError:
+            print_error(f"Failed to stage files for commit {i}. Skipping.")
+            continue
+
+        # Commit
+        try:
+            subprocess.run(["git", "commit", "-m", message], cwd=repo_path, check=True)
+            print_success(f"Commit {i} created.")
+            committed_files.update(files)
+        except subprocess.CalledProcessError:
+            print_error(f"Failed to create commit {i}.")
+
+    # Check for leftover files
+    leftover = staged_files_start - committed_files
+    if leftover:
+        # Re-stage leftovers so user doesn't lose track of them
+        try:
+            subprocess.run(["git", "add"] + list(leftover), cwd=repo_path, check=True, stderr=subprocess.DEVNULL)
+            print_warning(f"Warning: The following files were NOT committed and have been re-staged: {', '.join(leftover)}")
+        except:
+             print_warning(f"Warning: The following files were NOT committed: {', '.join(leftover)}")
 
 def main():
     # Load config
@@ -270,6 +355,7 @@ def main():
 
     print_info(f"Checking for staged changes in {repo_path}...")
     diff = get_staged_diff(repo_path)
+    current_staged_files = get_staged_files(repo_path)
 
     if not diff.strip():
         print_warning("No staged changes.")
@@ -291,64 +377,112 @@ def main():
             else:
                 print_info(f"Generating commit message using model '{args.model}'...")
 
-        commit_msg = call_ollama(args.url, args.model, prompt, dry_run=args.dry_run)
+        response_text = call_ollama(args.url, args.model, prompt, dry_run=args.dry_run)
 
         if args.dry_run:
-            if commit_msg:
-                 print(commit_msg)
+            if response_text:
+                 print(response_text)
             return
 
-        # Main interaction loop
-        if args.commit:
-            print(f"\n{Fore.MAGENTA}--- Generated Commit Message ---{Style.RESET_ALL}")
-            print(commit_msg)
-            print(f"{Fore.MAGENTA}--------------------------------{Style.RESET_ALL}")
-            try:
-                choice = input(f"{Fore.YELLOW}Do you want to commit with this message? [y/N/r] {Style.RESET_ALL}").strip().lower()
-                if choice == 'y':
-                    subprocess.run(["git", "commit", "-m", commit_msg], cwd=repo_path, check=True)
-                    print_success("Committed successfully.")
-                    break
-                elif choice == 'r':
-                    user_input = input(f"{Fore.CYAN}Optional feedback (press Enter to just retry): {Style.RESET_ALL}").strip()
-                    prompt_suffix = user_input if user_input else "Please regenerate a better commit message."
-                    continue
+        # Handle Output based on format
+        if args.format == "split":
+            json_plan = extract_json(response_text)
+
+            if not json_plan or not isinstance(json_plan, list):
+                print_error("Error: Failed to parse JSON plan from model response.")
+                print_info("Raw response:")
+                print(response_text)
+
+                # Allow user to retry if parsing failed
+                if args.commit:
+                    choice = input(f"{Fore.YELLOW}Parsing failed. Do you want to retry generation? [y/N] {Style.RESET_ALL}").strip().lower()
+                    if choice == 'y':
+                        prompt_suffix = "Previous response was not valid JSON. Please return strictly valid JSON array."
+                        continue
+                break
+
+            print(f"\n{Fore.MAGENTA}--- Proposed Split Commit Plan ---{Style.RESET_ALL}")
+            for i, item in enumerate(json_plan, 1):
+                print(f"{Fore.CYAN}Commit {i}:{Style.RESET_ALL} {item.get('message', 'No message').splitlines()[0]}")
+                files_list = item.get('files', [])
+                if len(files_list) > 3:
+                     print(f"  Files: {', '.join(files_list[:3])}, ... (+{len(files_list)-3} more)")
                 else:
-                    print_warning("Commit aborted.")
-                    break
-            except KeyboardInterrupt:
-                print_warning("\nAborted.")
-                sys.exit(1)
-            except subprocess.CalledProcessError as e:
-                 print_error(f"Error executing git commit: {e}")
-                 sys.exit(1)
+                     print(f"  Files: {', '.join(files_list)}")
+            print(f"{Fore.MAGENTA}------------------------------------{Style.RESET_ALL}")
 
-        elif args.edit:
-            # Edit mode: generate -> open editor -> commit
-            # We don't support retry loop here easily because 'edit' implies handing off control to the editor.
-
-            # Create a temporary file with the commit message
-            with tempfile.NamedTemporaryFile(mode='w+', delete=False, encoding='utf-8') as tf:
-                tf.write(commit_msg)
-                temp_path = tf.name
-
-            try:
-                print_info("Opening editor for review...")
-                subprocess.run(["git", "commit", "-e", "-F", temp_path], cwd=repo_path, check=True)
-                print_success("Committed successfully.")
-            except subprocess.CalledProcessError as e:
-                 print_error(f"Error executing git commit: {e}")
-                 sys.exit(1)
-            finally:
-                if os.path.exists(temp_path):
-                    os.remove(temp_path)
-            break
+            if args.commit:
+                try:
+                    choice = input(f"{Fore.YELLOW}Do you want to EXECUTE this split plan? [y/N/r] {Style.RESET_ALL}").strip().lower()
+                    if choice == 'y':
+                        execute_smart_split(json_plan, repo_path, current_staged_files)
+                        break
+                    elif choice == 'r':
+                        user_input = input(f"{Fore.CYAN}Optional feedback (press Enter to just retry): {Style.RESET_ALL}").strip()
+                        prompt_suffix = user_input if user_input else "Please regenerate the split plan."
+                        continue
+                    else:
+                        print_warning("Operation aborted.")
+                        break
+                except KeyboardInterrupt:
+                    print_warning("\nAborted.")
+                    sys.exit(1)
+            else:
+                 # Standard output (just print JSON for piping/inspection)
+                 print(json.dumps(json_plan, indent=2))
+                 break
 
         else:
-            # Standard output mode
-            # Just print the message cleanly so it can be piped
-            print(commit_msg)
-            break
+            # Standard "generate" or "emoji" flow (Single Commit)
+            commit_msg = response_text
+
+            # Main interaction loop
+            if args.commit:
+                print(f"\n{Fore.MAGENTA}--- Generated Commit Message ---{Style.RESET_ALL}")
+                print(commit_msg)
+                print(f"{Fore.MAGENTA}--------------------------------{Style.RESET_ALL}")
+                try:
+                    choice = input(f"{Fore.YELLOW}Do you want to commit with this message? [y/N/r] {Style.RESET_ALL}").strip().lower()
+                    if choice == 'y':
+                        subprocess.run(["git", "commit", "-m", commit_msg], cwd=repo_path, check=True)
+                        print_success("Committed successfully.")
+                        break
+                    elif choice == 'r':
+                        user_input = input(f"{Fore.CYAN}Optional feedback (press Enter to just retry): {Style.RESET_ALL}").strip()
+                        prompt_suffix = user_input if user_input else "Please regenerate a better commit message."
+                        continue
+                    else:
+                        print_warning("Commit aborted.")
+                        break
+                except KeyboardInterrupt:
+                    print_warning("\nAborted.")
+                    sys.exit(1)
+                except subprocess.CalledProcessError as e:
+                     print_error(f"Error executing git commit: {e}")
+                     sys.exit(1)
+
+            elif args.edit:
+                # Edit mode: generate -> open editor -> commit
+                with tempfile.NamedTemporaryFile(mode='w+', delete=False, encoding='utf-8') as tf:
+                    tf.write(commit_msg)
+                    temp_path = tf.name
+
+                try:
+                    print_info("Opening editor for review...")
+                    subprocess.run(["git", "commit", "-e", "-F", temp_path], cwd=repo_path, check=True)
+                    print_success("Committed successfully.")
+                except subprocess.CalledProcessError as e:
+                     print_error(f"Error executing git commit: {e}")
+                     sys.exit(1)
+                finally:
+                    if os.path.exists(temp_path):
+                        os.remove(temp_path)
+                break
+
+            else:
+                # Standard output mode
+                print(commit_msg)
+                break
 
 if __name__ == "__main__":
     main()
