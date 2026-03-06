@@ -250,7 +250,8 @@ def call_ollama(url, model, prompt, dry_run=False):
             except:
                 pass # Ignore errors when trying to help
         else:
-            print_error(f"Error calling Ollama API: {e}")
+            print_error(f"Error calling Ollama API (HTTP {e.response.status_code}): {e}")
+            print_error(f"API Response: {e.response.text}")
         sys.exit(1)
     except requests.exceptions.RequestException as e:
         print_error(f"Error calling Ollama API: {e}")
@@ -361,8 +362,16 @@ def main():
         print_warning("No staged changes.")
         return
 
-    # Warning for large diffs
-    if len(diff) > 10000:
+    # Fallback to file names only for extremely large diffs
+    MAX_DIFF_LENGTH = 15000
+    if len(diff) > MAX_DIFF_LENGTH:
+        print_warning(f"Warning: Massive diff detected ({len(diff)} characters).")
+        print_info("Falling back to generating messages based on filenames only to avoid API errors.")
+
+        file_list_str = "\n".join([f"- {f}" for f in current_staged_files])
+        diff = f"[DIFF TOO LARGE. Showing modified files only:]\n{file_list_str}\n\n[INSTRUCTION: Generate the commit message(s) based ONLY on these filenames and their paths. Guess the intent based on file names.]"
+    elif len(diff) > 10000:
+        # Just a warning for moderately large diffs
         print_warning(f"Warning: Large diff detected ({len(diff)} characters). Results might be truncated or less accurate.")
 
     # Interactive generation and retry loop
